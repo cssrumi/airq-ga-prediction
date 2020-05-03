@@ -1,0 +1,28 @@
+quarkus:
+  application:
+    name: ga-prediction
+  datasource:
+    db-kind: postgresql
+    username: postgres
+    jdbc:
+      url: jdbc:postgresql://10.1.1.50:5432/warehouse
+    reactive:
+      url: postgresql://10.1.1.50:5432/warehouse
+  flyway:
+    migrate-at-start: true
+    baseline-on-migrate: true
+  vertx:
+    prefer-native-transport: true
+
+mp:
+  messaging:
+    incoming:
+      data-enriched:
+        connector: smallrye-kafka
+        topic: data.enriched
+        value:
+          deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+kafka:
+  bootstrap:
+    servers: 10.1.1.51:9092
