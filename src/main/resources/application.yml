@@ -26,5 +26,7 @@ mp:
           deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 kafka:
+  group:
+    id: airq-ga-prediction
   bootstrap:
     servers: 10.1.1.51:9092

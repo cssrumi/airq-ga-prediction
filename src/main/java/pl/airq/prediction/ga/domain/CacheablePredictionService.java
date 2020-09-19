@@ -2,11 +2,13 @@ package pl.airq.prediction.ga.domain;
 
 import io.smallrye.mutiny.Uni;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.airq.common.domain.enriched.EnrichedData;
+import pl.airq.common.domain.exception.ResourceNotFoundException;
 import pl.airq.common.domain.phenotype.AirqPhenotype;
 import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.vo.StationId;
@@ -36,6 +38,14 @@ class CacheablePredictionService implements PredictionService {
 
     @Override
     public Prediction predict(AirqPhenotype phenotype, EnrichedData enrichedData) {
+        if (Objects.isNull(phenotype)) {
+            throw new ResourceNotFoundException(AirqPhenotype.class);
+        }
+
+        if (Objects.isNull(enrichedData)) {
+            throw new ResourceNotFoundException(EnrichedData.class);
+        }
+
         double predictedValue = 0;
         for (int i = 0; i < phenotype.fields.size(); i++) {
             predictedValue += MAP.getFloat(phenotype.fields.get(i), enrichedData) * phenotype.values.get(i);
