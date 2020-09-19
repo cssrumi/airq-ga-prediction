@@ -4,9 +4,12 @@ import io.smallrye.mutiny.Uni;
 import pl.airq.common.domain.enriched.EnrichedData;
 import pl.airq.common.domain.phenotype.AirqPhenotype;
 import pl.airq.common.domain.prediction.Prediction;
+import pl.airq.common.vo.StationId;
 
-public interface PredictionService {
+interface PredictionService {
 
-    Prediction predict(EnrichedData data, AirqPhenotype phenotype);
+    Uni<Prediction> predict(StationId stationId);
+
+    Prediction predict(AirqPhenotype phenotype, EnrichedData enrichedData);
 
 }
