@@ -38,13 +38,7 @@ class CacheablePredictionService implements PredictionService {
 
     @Override
     public Prediction predict(AirqPhenotype phenotype, EnrichedData enrichedData) {
-        if (Objects.isNull(phenotype)) {
-            throw new ResourceNotFoundException(AirqPhenotype.class);
-        }
-
-        if (Objects.isNull(enrichedData)) {
-            throw new ResourceNotFoundException(EnrichedData.class);
-        }
+        validatePrediction(phenotype, enrichedData);
 
         double predictedValue = 0;
         for (int i = 0; i < phenotype.fields.size(); i++) {
@@ -54,5 +48,22 @@ class CacheablePredictionService implements PredictionService {
         Prediction prediction = new Prediction(OffsetDateTime.now(), predictedValue, phenotype.prediction, phenotype.stationId);
         LOGGER.info("New Prediction created: {}", prediction);
         return prediction;
+    }
+
+    private void validatePrediction(AirqPhenotype phenotype, EnrichedData enrichedData) {
+        if (Objects.isNull(phenotype)) {
+            throw new ResourceNotFoundException(AirqPhenotype.class);
+        }
+        if (Objects.isNull(enrichedData)) {
+            throw new ResourceNotFoundException(EnrichedData.class);
+        }
+        if (phenotype.values.size() != phenotype.fields.size()) {
+            throw new PredictionProcessingException(String.format("%s fields abd values size does not match.",
+                    AirqPhenotype.class.getSimpleName()));
+        }
+        if (phenotype.stationId != enrichedData.station) {
+            throw new PredictionProcessingException(String.format("Station for %s and %s does not match.",
+                    AirqPhenotype.class.getSimpleName(), EnrichedData.class.getSimpleName()));
+        }
     }
 }

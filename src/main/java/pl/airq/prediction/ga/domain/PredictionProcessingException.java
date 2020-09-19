@@ -12,6 +12,10 @@ public class PredictionProcessingException extends ProcessingException {
         super(DEFAULT_MESSAGE);
     }
 
+    public PredictionProcessingException(String message) {
+        super(message);
+    }
+
     public PredictionProcessingException(Throwable cause) {
         super(DEFAULT_MESSAGE, cause);
     }

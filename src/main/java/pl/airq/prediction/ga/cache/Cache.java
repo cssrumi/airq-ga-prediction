@@ -15,4 +15,8 @@ public interface Cache<K, V> {
     Uni<Void> remove(K key);
 
     void removeBlocking(K key);
+
+    Uni<Void> clear();
+
+    void clearBlocking();
 }

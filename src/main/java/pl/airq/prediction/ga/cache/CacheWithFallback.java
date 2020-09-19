@@ -44,6 +44,16 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
         intoBlocking(remove(key));
     }
 
+    @Override
+    public Uni<Void> clear() {
+        return Uni.createFrom().voidItem().invoke(ignore -> cache.clear());
+    }
+
+    @Override
+    public void clearBlocking() {
+        intoBlocking(clear());
+    }
+
     protected <T> T intoBlocking(Uni<T> uni) {
         return uni.emitOn(executor)
                   .await().atMost(Duration.ofSeconds(5));
