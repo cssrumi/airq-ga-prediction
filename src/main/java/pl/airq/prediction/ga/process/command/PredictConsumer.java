@@ -5,6 +5,7 @@ import io.smallrye.mutiny.Uni;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import pl.airq.common.process.AppEventBus;
+import pl.airq.common.process.MutinyUtils;
 import pl.airq.common.process.event.Consumer;
 import pl.airq.common.process.failure.Failure;
 import pl.airq.prediction.ga.domain.PredictionFacade;
@@ -31,7 +32,7 @@ public class PredictConsumer implements Consumer<Predict> {
     @Override
     public Uni<Void> consume(Predict event) {
         return predictionFacade.predict(event.payload.stationId)
-                               .onItem().castTo(Void.class)
+                               .onItem().transformToUni(MutinyUtils::ignoreUniResult)
                                .onFailure().invoke(throwable -> eventBus.publish(Failure.from(throwable)));
     }
 }

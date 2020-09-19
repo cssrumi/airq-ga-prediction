@@ -21,4 +21,9 @@ public class PhenotypeCache extends CacheWithFallback<StationId, AirqPhenotype> 
     Uni<AirqPhenotype> findLatest(StationId key) {
         return query.findLatestByStationId(key);
     }
+
+    @Override
+    String cacheName() {
+        return PhenotypeCache.class.getSimpleName();
+    }
 }

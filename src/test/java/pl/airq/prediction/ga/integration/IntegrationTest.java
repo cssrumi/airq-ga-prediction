@@ -3,6 +3,7 @@ package pl.airq.prediction.ga.integration;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
+import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -22,7 +23,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.platform.commons.util.StringUtils;
+import org.mockito.verification.Timeout;
 import org.testcontainers.shaded.org.apache.commons.lang.RandomStringUtils;
 import pl.airq.common.domain.DataProvider;
 import pl.airq.common.domain.enriched.AirqDataEnrichedEvent;
@@ -33,6 +34,9 @@ import pl.airq.common.domain.phenotype.AirqPhenotypeCreatedEvent;
 import pl.airq.common.domain.phenotype.AirqPhenotypeCreatedPayload;
 import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.domain.prediction.PredictionConfig;
+import pl.airq.common.infrastructure.persistance.AirqPhenotypeQueryPostgres;
+import pl.airq.common.infrastructure.persistance.EnrichedDataQueryPostgres;
+import pl.airq.common.infrastructure.persistance.PredictionQueryPostgres;
 import pl.airq.common.process.EventParser;
 import pl.airq.common.process.event.AirqEvent;
 import pl.airq.common.vo.StationId;
@@ -40,6 +44,10 @@ import pl.airq.prediction.ga.cache.Cache;
 import pl.airq.prediction.ga.infrastructure.PredictionRepositoryPostgres;
 
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @QuarkusTestResource(KafkaResource.class)
@@ -57,6 +65,12 @@ public class IntegrationTest {
     private String airqPhenotypeCreatedTopic;
     @InjectMock
     private PredictionRepositoryPostgres repository;
+    @InjectMock
+    private AirqPhenotypeQueryPostgres phenotypeQuery;
+    @InjectMock
+    private EnrichedDataQueryPostgres enrichedDataQuery;
+    @InjectMock
+    private PredictionQueryPostgres predictionQuery;
     @Inject
     private KafkaProducer<Void, String> client;
     @Inject
@@ -73,6 +87,11 @@ public class IntegrationTest {
         predictionCache.clearBlocking();
         enrichedDataCache.clearBlocking();
         airqPhenotypeCache.clearBlocking();
+        reset(repository, phenotypeQuery, enrichedDataQuery, predictionQuery);
+        when(repository.save(any(Prediction.class))).thenReturn(Uni.createFrom().item(Boolean.TRUE));
+        when(phenotypeQuery.findLatestByStationId(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
+        when(enrichedDataQuery.findLatestByStation(any(String.class))).thenReturn(Uni.createFrom().nullItem());
+        when(predictionQuery.findLatest(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
     }
 
     @AfterAll
@@ -85,11 +104,54 @@ public class IntegrationTest {
         final StationId stationId = stationId();
         final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreatedEvent(stationId);
         final AirqDataEnrichedEvent airqDataEnrichedEvent = airqDataEnrichedEvent(stationId);
+        Double expectedPredictionValue = (double) (DATA_TEMP * PHENOTYPE_TEMP + DATA_WIND * PHENOTYPE_WIND);
 
         sendEvent(airqPhenotypeCreatedEvent);
         sendEvent(airqDataEnrichedEvent);
 
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(airqPhenotypeCache.getBlocking(stationId)));
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
+
+        final Prediction result = predictionCache.getBlocking(stationId);
+
+        assertEquals(expectedPredictionValue, result.value);
+        assertEquals(stationId, result.stationId);
+        verify(repository, atLeastOnce()).save(any(Prediction.class));
+    }
+
+    @Test
+    void validate_whenEnrichedDataSend_expectNoPrediction() {
+        final StationId stationId = stationId();
+        final AirqDataEnrichedEvent event = airqDataEnrichedEvent(stationId);
+        // additional call to phenotypeQuery
+        assertNull(airqPhenotypeCache.getBlocking(stationId));
+
+        sendEvent(event);
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
+        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
+        verify(repository, new Timeout(Duration.ofSeconds(2).toMillis(), times(0))).save(any(Prediction.class));
+    }
+
+    @Test
+    void validate_whenEnrichedDataSend_expectPredictionInCache() {
+        final StationId stationId = stationId();
+        final AirqDataEnrichedEvent event = airqDataEnrichedEvent(stationId);
+        final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreatedEvent(stationId);
+        final AirqPhenotype phenotype = airqPhenotypeCreatedEvent.payload.airqPhenotype;
+        // every check increase query invocation
+        assertNull(airqPhenotypeCache.getBlocking(stationId));
+        assertNull(enrichedDataCache.getBlocking(stationId));
+        assertNull(predictionCache.getBlocking(stationId));
+        when(phenotypeQuery.findLatestByStationId(stationId)).thenReturn(Uni.createFrom().item(phenotype));
+
+        sendEvent(event);
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
+        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
+        verify(repository, timeout(Duration.ofSeconds(2).toMillis())).save(any(Prediction.class));
     }
 
     private StationId stationId() {
@@ -157,6 +219,7 @@ public class IntegrationTest {
         KafkaProducer<Void, String> stringKafkaProducer(@ConfigProperty(name = "kafka.bootstrap.servers") String bootstrapServers) {
             Properties properties = new Properties();
             properties.put("bootstrap.servers", bootstrapServers);
+            properties.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             properties.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
             return new KafkaProducer<>(properties);

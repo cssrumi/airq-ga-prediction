@@ -21,4 +21,9 @@ public class PredictionCache extends CacheWithFallback<StationId, Prediction> {
     Uni<Prediction> findLatest(StationId key) {
         return query.findLatest(key);
     }
+
+    @Override
+    String cacheName() {
+        return PhenotypeCache.class.getSimpleName();
+    }
 }

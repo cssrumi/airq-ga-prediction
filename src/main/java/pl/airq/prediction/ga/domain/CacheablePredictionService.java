@@ -58,12 +58,13 @@ class CacheablePredictionService implements PredictionService {
             throw new ResourceNotFoundException(EnrichedData.class);
         }
         if (phenotype.values.size() != phenotype.fields.size()) {
-            throw new PredictionProcessingException(String.format("%s fields abd values size does not match.",
+            throw new PredictionProcessingException(String.format("%s fields and values size does not match.",
                     AirqPhenotype.class.getSimpleName()));
         }
-        if (phenotype.stationId != enrichedData.station) {
-            throw new PredictionProcessingException(String.format("Station for %s and %s does not match.",
-                    AirqPhenotype.class.getSimpleName(), EnrichedData.class.getSimpleName()));
+        if (!Objects.equals(phenotype.stationId, enrichedData.station)) {
+            throw new PredictionProcessingException(String.format("Station for {%s: %s} and {%s: %s} does not match.",
+                    AirqPhenotype.class.getSimpleName(), phenotype.stationId,
+                    EnrichedData.class.getSimpleName(), enrichedData.station));
         }
     }
 }

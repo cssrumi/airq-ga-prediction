@@ -6,8 +6,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import pl.airq.common.process.MutinyUtils;
 
 abstract class CacheWithFallback<K, V> implements Cache<K, V> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CacheWithFallback.class);
     private final Map<K, V> cache = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -25,7 +29,7 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
     @Override
     public Uni<Void> upsert(K key, V value) {
         return Uni.createFrom().item(cache.put(key, value))
-                  .onItem().castTo(Void.class);
+                  .onItem().transformToUni(MutinyUtils::ignoreUniResult);
     }
 
     @Override
@@ -36,7 +40,7 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
     @Override
     public Uni<Void> remove(K key) {
         return Uni.createFrom().item(cache.remove(key))
-                  .onItem().castTo(Void.class);
+                  .onItem().transformToUni(MutinyUtils::ignoreUniResult);
     }
 
     @Override
@@ -46,7 +50,8 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
 
     @Override
     public Uni<Void> clear() {
-        return Uni.createFrom().voidItem().invoke(ignore -> cache.clear());
+        return MutinyUtils.uniFromRunnable(cache::clear)
+                          .invoke(ignore -> LOGGER.info("{} cleared.", cacheName()));
     }
 
     @Override
@@ -65,4 +70,6 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
     }
 
     abstract Uni<V> findLatest(K key);
+
+    abstract String cacheName();
 }
