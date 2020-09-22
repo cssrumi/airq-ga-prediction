@@ -1,25 +1,30 @@
 package pl.airq.prediction.ga.domain;
 
+import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
+import java.time.OffsetDateTime;
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.jboss.resteasy.annotations.SseElementType;
 import org.jboss.resteasy.annotations.jaxrs.PathParam;
+import pl.airq.common.domain.prediction.Prediction;
+import pl.airq.common.vo.StationId;
 
 @Path("/api/prediction")
 @Produces(MediaType.APPLICATION_JSON)
-@Consumes(MediaType.APPLICATION_JSON)
 public class PredictionEndpoint {
 
     private final PredictionFacade predictionFacade;
+    private final PredictionSubject subject;
 
     @Inject
-    public PredictionEndpoint(PredictionFacade predictionFacade) {
+    public PredictionEndpoint(PredictionFacade predictionFacade, PredictionSubject subject) {
         this.predictionFacade = predictionFacade;
+        this.subject = subject;
     }
 
     @GET
@@ -27,5 +32,21 @@ public class PredictionEndpoint {
     public Uni<Response> findLatest(@PathParam String stationId) {
         return predictionFacade.findPrediction(stationId)
                                .onItem().transform(prediction -> Response.ok(prediction).build());
+    }
+
+    @GET
+    @Path("/{stationId}/stream")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @SseElementType(MediaType.APPLICATION_JSON)
+    public Multi<Prediction> stream(@PathParam String stationId) {
+        return subject.stream(StationId.from(stationId));
+    }
+
+    @GET
+    @Path("/{stationId}/emmit")
+    public Uni<Response> emmit(@PathParam String stationId) {
+        return Uni.createFrom().voidItem()
+                  .invoke(ignore -> subject.emmit(new Prediction(OffsetDateTime.now(), null, null, StationId.from(stationId))))
+                  .onItem().transform(ignore -> Response.ok().build());
     }
 }
