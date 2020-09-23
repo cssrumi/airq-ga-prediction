@@ -32,12 +32,3 @@ kafka:
     id: airq-ga-prediction
   bootstrap:
     servers: 10.1.1.51:9092
-
-"%test":
-  pl:
-    airq:
-      prediction:
-        ga:
-          domain:
-            PredictionClient/mp-rest/url: http://0.0.0.0:${quarkus.http.test-port}
-            PredictionClient/mp-rest/scope: javax.enterprise.context.ApplicationScoped

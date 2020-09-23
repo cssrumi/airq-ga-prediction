@@ -41,12 +41,4 @@ public class PredictionEndpoint {
     public Multi<Prediction> stream(@PathParam String stationId) {
         return subject.stream(StationId.from(stationId));
     }
-
-    @GET
-    @Path("/{stationId}/emmit")
-    public Uni<Response> emmit(@PathParam String stationId) {
-        return Uni.createFrom().voidItem()
-                  .invoke(ignore -> subject.emmit(new Prediction(OffsetDateTime.now(), null, null, StationId.from(stationId))))
-                  .onItem().transform(ignore -> Response.ok().build());
-    }
 }
