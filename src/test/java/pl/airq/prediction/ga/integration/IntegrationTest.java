@@ -3,6 +3,7 @@ package pl.airq.prediction.ga.integration;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -41,7 +42,7 @@ import pl.airq.common.process.EventParser;
 import pl.airq.common.process.event.AirqEvent;
 import pl.airq.common.vo.StationId;
 import pl.airq.prediction.ga.cache.Cache;
-import pl.airq.prediction.ga.infrastructure.PredictionRepositoryPostgres;
+import pl.airq.prediction.ga.domain.MockPredictionRepositoryPostgres;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,13 +65,13 @@ public class IntegrationTest {
     @ConfigProperty(name = "mp.messaging.incoming.airq-phenotype-created.topic")
     private String airqPhenotypeCreatedTopic;
     @InjectMock
-    private PredictionRepositoryPostgres repository;
-    @InjectMock
     private AirqPhenotypeQueryPostgres phenotypeQuery;
     @InjectMock
     private EnrichedDataQueryPostgres enrichedDataQuery;
     @InjectMock
     private PredictionQueryPostgres predictionQuery;
+    @InjectSpy
+    private MockPredictionRepositoryPostgres repository;
     @Inject
     private KafkaProducer<Void, String> client;
     @Inject
@@ -88,7 +89,7 @@ public class IntegrationTest {
         enrichedDataCache.clearBlocking();
         airqPhenotypeCache.clearBlocking();
         reset(repository, phenotypeQuery, enrichedDataQuery, predictionQuery);
-        when(repository.save(any(Prediction.class))).thenReturn(Uni.createFrom().item(Boolean.TRUE));
+        repository.setSaveAndUpsertResult(Boolean.TRUE);
         when(phenotypeQuery.findLatestByStationId(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
         when(enrichedDataQuery.findLatestByStation(any(String.class))).thenReturn(Uni.createFrom().nullItem());
         when(predictionQuery.findLatest(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());

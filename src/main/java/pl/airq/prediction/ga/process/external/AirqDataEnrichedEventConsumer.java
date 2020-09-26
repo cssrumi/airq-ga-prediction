@@ -11,8 +11,8 @@ import pl.airq.common.process.AppEventBus;
 import pl.airq.common.process.EventParser;
 import pl.airq.common.vo.StationId;
 import pl.airq.prediction.ga.cache.Cache;
-import pl.airq.prediction.ga.model.EventFactory;
-import pl.airq.prediction.ga.model.TopicConstant;
+import pl.airq.prediction.ga.process.EventFactory;
+import pl.airq.prediction.ga.process.TopicConstant;
 
 @ApplicationScoped
 public class AirqDataEnrichedEventConsumer {

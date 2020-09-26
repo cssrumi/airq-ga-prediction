@@ -2,15 +2,12 @@ package pl.airq.prediction.ga.process.event;
 
 import io.quarkus.vertx.ConsumeEvent;
 import io.smallrye.mutiny.Uni;
-import java.util.concurrent.Callable;
-import java.util.function.Supplier;
 import javax.enterprise.context.ApplicationScoped;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.airq.common.process.MutinyUtils;
 import pl.airq.common.process.event.Consumer;
-import pl.airq.prediction.ga.model.TopicConstant;
-import pl.airq.prediction.ga.model.event.PredictionCreated;
+import pl.airq.prediction.ga.process.TopicConstant;
 
 @ApplicationScoped
 public class PredictionCreatedConsumer implements Consumer<PredictionCreated> {

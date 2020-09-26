@@ -1,8 +1,8 @@
-package pl.airq.prediction.ga.model.command;
+package pl.airq.prediction.ga.process.command;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import pl.airq.common.process.event.AppEvent;
-import pl.airq.prediction.ga.model.TopicConstant;
+import pl.airq.prediction.ga.process.TopicConstant;
 
 @RegisterForReflection
 public class Predict extends AppEvent<PredictPayload> {

@@ -1,6 +1,5 @@
 package pl.airq.prediction.ga.domain;
 
-import io.quarkus.arc.DefaultBean;
 import io.smallrye.mutiny.Uni;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
@@ -12,7 +11,7 @@ import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.process.AppEventBus;
 import pl.airq.common.vo.StationId;
 import pl.airq.prediction.ga.cache.Cache;
-import pl.airq.prediction.ga.model.EventFactory;
+import pl.airq.prediction.ga.process.EventFactory;
 
 @ApplicationScoped
 public class PredictionFacade {

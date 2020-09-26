@@ -9,8 +9,7 @@ import pl.airq.common.process.MutinyUtils;
 import pl.airq.common.process.event.Consumer;
 import pl.airq.common.process.failure.Failure;
 import pl.airq.prediction.ga.domain.PredictionFacade;
-import pl.airq.prediction.ga.model.TopicConstant;
-import pl.airq.prediction.ga.model.command.Predict;
+import pl.airq.prediction.ga.process.TopicConstant;
 
 @ApplicationScoped
 public class PredictConsumer implements Consumer<Predict> {

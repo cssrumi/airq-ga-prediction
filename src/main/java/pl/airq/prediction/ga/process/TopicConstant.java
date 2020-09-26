@@ -1,4 +1,4 @@
-package pl.airq.prediction.ga.model;
+package pl.airq.prediction.ga.process;
 
 public class TopicConstant {
 
