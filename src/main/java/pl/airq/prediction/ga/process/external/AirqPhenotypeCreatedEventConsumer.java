@@ -5,6 +5,8 @@ import javax.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.airq.common.domain.enriched.AirqDataEnrichedEvent;
+import pl.airq.common.domain.exception.DeserializationException;
 import pl.airq.common.domain.phenotype.AirqPhenotype;
 import pl.airq.common.domain.phenotype.AirqPhenotypeCreatedEvent;
 import pl.airq.common.process.AppEventBus;
@@ -33,7 +35,13 @@ public class AirqPhenotypeCreatedEventConsumer {
 
     @Incoming(TopicConstant.AIRQ_PHENOTYPE_CREATED_EXTERNAL_TOPIC)
     public void consume(String rawEvent) {
-        final AirqPhenotypeCreatedEvent event = parser.parse(rawEvent, AirqPhenotypeCreatedEvent.class);
+        final AirqPhenotypeCreatedEvent event;
+        try {
+            event = parser.parse(rawEvent, AirqPhenotypeCreatedEvent.class);
+        } catch (DeserializationException e) {
+            LOGGER.warn("Unable to process event: {}.", rawEvent, e);
+            return;
+        }
         final AirqPhenotype airqPhenotype = event.payload.airqPhenotype;
         final StationId stationId = airqPhenotype.stationId;
 

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.airq.common.domain.enriched.AirqDataEnrichedEvent;
 import pl.airq.common.domain.enriched.EnrichedData;
+import pl.airq.common.domain.exception.DeserializationException;
 import pl.airq.common.process.AppEventBus;
 import pl.airq.common.process.EventParser;
 import pl.airq.common.vo.StationId;
@@ -33,7 +34,13 @@ public class AirqDataEnrichedEventConsumer {
 
     @Incoming(TopicConstant.DATA_ENRICHED_EXTERNAL_TOPIC)
     public void consume(String rawEvent) {
-        final AirqDataEnrichedEvent event = parser.parse(rawEvent, AirqDataEnrichedEvent.class);
+        final AirqDataEnrichedEvent event;
+        try {
+            event = parser.parse(rawEvent, AirqDataEnrichedEvent.class);
+        } catch (DeserializationException e) {
+            LOGGER.warn("Unable to process event: {}.", rawEvent, e);
+            return;
+        }
         final EnrichedData enrichedData = event.payload.enrichedData;
         final StationId stationId = enrichedData.station;
 
