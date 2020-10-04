@@ -110,7 +110,7 @@ public class IntegrationTest {
         sendEvent(airqPhenotypeCreatedEvent);
         sendEvent(airqDataEnrichedEvent);
 
-        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(airqPhenotypeCache.getBlocking(stationId)));
+        await().atMost(Duration.ofSeconds(20)).until(() -> Objects.nonNull(airqPhenotypeCache.getBlocking(stationId)));
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
 
