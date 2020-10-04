@@ -2,7 +2,6 @@ package pl.airq.prediction.ga.domain;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import java.time.OffsetDateTime;
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;

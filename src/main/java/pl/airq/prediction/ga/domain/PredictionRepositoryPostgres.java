@@ -6,6 +6,7 @@ import io.vertx.mutiny.pgclient.PgPool;
 import io.vertx.mutiny.sqlclient.Row;
 import io.vertx.mutiny.sqlclient.RowSet;
 import io.vertx.mutiny.sqlclient.Tuple;
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
@@ -25,6 +26,11 @@ public class PredictionRepositoryPostgres extends PersistentRepositoryPostgres<P
     public PredictionRepositoryPostgres(PgPool client, ObjectMapper mapper) {
         super(client);
         this.mapper = mapper;
+    }
+
+    @PostConstruct
+    void postConstruct() {
+        LOGGER.info("{} initialized...", PredictionRepositoryPostgres.class.getSimpleName());
     }
 
     @Override
@@ -49,6 +55,7 @@ public class PredictionRepositoryPostgres extends PersistentRepositoryPostgres<P
 
     @Override
     protected void postSaveAction(RowSet<Row> saveResult) {
+        LOGGER.debug("Processed {} rows...", saveResult.size());
     }
 
     @Override

@@ -19,7 +19,7 @@
     </scm>
 
     <properties>
-        <common.version>1.8</common.version>
+        <common.version>1.9</common.version>
         <kafka.version>1.14.3</kafka.version>
         <kafka-clients.version>2.6.0</kafka-clients.version>
     </properties>

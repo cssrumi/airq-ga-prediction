@@ -42,7 +42,7 @@ public class PredictionFacade {
                                 .invoke(repository::save)
                                 .invokeUni(prediction -> cache.upsert(stationId, prediction))
                                 .invoke(prediction -> eventBus.publish(EventFactory.predictionCreated(prediction)))
-                                .invoke(publisher::emmit);
+                                .invoke(publisher::emit);
     }
 
     public Uni<Prediction> findPrediction(String stationId) {

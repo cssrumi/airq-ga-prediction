@@ -61,27 +61,27 @@ public class IntegrationTest {
     private static final Float PHENOTYPE_WIND = 2f;
 
     @ConfigProperty(name = "mp.messaging.incoming.data-enriched.topic")
-    private String dataEnrichedTopic;
+    String dataEnrichedTopic;
     @ConfigProperty(name = "mp.messaging.incoming.airq-phenotype-created.topic")
-    private String airqPhenotypeCreatedTopic;
+    String airqPhenotypeCreatedTopic;
     @InjectMock
-    private AirqPhenotypeQueryPostgres phenotypeQuery;
+    AirqPhenotypeQueryPostgres phenotypeQuery;
     @InjectMock
-    private EnrichedDataQueryPostgres enrichedDataQuery;
+    EnrichedDataQueryPostgres enrichedDataQuery;
     @InjectMock
-    private PredictionQueryPostgres predictionQuery;
+    PredictionQueryPostgres predictionQuery;
     @InjectSpy
-    private MockPredictionRepositoryPostgres repository;
+    MockPredictionRepositoryPostgres repository;
     @Inject
-    private KafkaProducer<Void, String> client;
+    KafkaProducer<Void, String> client;
     @Inject
-    private Cache<StationId, Prediction> predictionCache;
+    Cache<StationId, Prediction> predictionCache;
     @Inject
-    private Cache<StationId, EnrichedData> enrichedDataCache;
+    Cache<StationId, EnrichedData> enrichedDataCache;
     @Inject
-    private Cache<StationId, AirqPhenotype> airqPhenotypeCache;
+    Cache<StationId, AirqPhenotype> airqPhenotypeCache;
     @Inject
-    private EventParser parser;
+    EventParser parser;
 
     @BeforeEach
     void beforeEach() {

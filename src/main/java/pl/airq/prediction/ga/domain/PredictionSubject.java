@@ -1,6 +1,7 @@
 package pl.airq.prediction.ga.domain;
 
 import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
 import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
 import java.util.Objects;
 import javax.enterprise.context.ApplicationScoped;
@@ -13,9 +14,10 @@ import pl.airq.common.vo.StationId;
 class PredictionSubject {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PredictionSubject.class);
-    private final UnicastProcessor<Prediction> subject = UnicastProcessor.create();
+//    private final UnicastProcessor<Prediction> subject = UnicastProcessor.create();
+    private final BroadcastProcessor<Prediction> subject = BroadcastProcessor.create();
 
-    void emmit(Prediction prediction) {
+    void emit(Prediction prediction) {
         subject.onNext(prediction);
         LOGGER.info("New prediction has been emitted");
     }
