@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>pl.airq</groupId>
     <artifactId>ga-prediction</artifactId>
-    <version>1.0.7</version>
+    <version>1.0.8-SNAPSHOT</version>
 
     <parent>
         <groupId>pl.airq</groupId>
@@ -15,7 +15,7 @@
         <developerConnection>scm:git:https://github.com/cssrumi/airq-ga-prediction.git</developerConnection>
         <connection>scm:git:https://github.com/cssrumi/airq-ga-prediction.git</connection>
         <url>https://github.com/cssrumi/airq-ga-prediction.git</url>
-        <tag>ga-prediction-1.0.7</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <properties>
