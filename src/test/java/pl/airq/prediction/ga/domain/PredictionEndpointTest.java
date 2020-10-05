@@ -62,16 +62,16 @@ public class PredictionEndpointTest {
     }
 
     @Test
-    void stream() {
+    void stream_with5EventsEmitted_expect5Events() {
         StationId stationId = StationId.from("station");
         final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.getId())
                                                  .setEventEmitter(() -> {
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                  })
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                 })
                                                  .runFor(Duration.ofSeconds(1))
                                                  .getCollectedEvents();
 
@@ -84,16 +84,16 @@ public class PredictionEndpointTest {
         subject.emit(prediction(stationId));
         final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.getId())
                                                  .setEventEmitter(() -> {
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                      emit(prediction(stationId));
-                                                  })
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                     emit(prediction(stationId), 0);
+                                                 })
                                                  .runFor(Duration.ofSeconds(1))
                                                  .getCollectedEvents();
 
-        assertEquals(6, events.size());
+        assertEquals(5, events.size());
     }
 
     private void emit(Prediction prediction) {
@@ -102,13 +102,16 @@ public class PredictionEndpointTest {
 
     private void emit(Prediction prediction, long delayInMillis) {
         subject.emit(prediction);
-        sleep(Duration.ofMillis(delayInMillis));
+        if (delayInMillis > 0) {
+            sleep(Duration.ofMillis(delayInMillis));
+        }
     }
 
     private Prediction prediction(StationId stationId) {
         final int value = CURRENT_PREDICTION_VALUE.getAndIncrement();
         LOGGER.info("Prediction {} created.", value);
-        return new Prediction(OffsetDateTime.now(), Integer.valueOf(value).doubleValue(), new PredictionConfig(1L, ChronoUnit.HOURS, "pm10"), stationId);
+        return new Prediction(OffsetDateTime.now(), Integer.valueOf(value)
+                                                           .doubleValue(), new PredictionConfig(1L, ChronoUnit.HOURS, "pm10"), stationId);
     }
 
     private void sleep(Duration duration) {
