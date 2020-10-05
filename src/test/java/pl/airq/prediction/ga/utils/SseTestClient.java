@@ -4,64 +4,52 @@ import io.restassured.RestAssured;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.sse.InboundSseEvent;
 import javax.ws.rs.sse.SseEventSource;
-import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SseTestClient2 {
+public class SseTestClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SseTestClient2.class);
-    private final AtomicBoolean isEventSourceReady = new AtomicBoolean(false);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SseTestClient.class);
     private List<String> collectedEvents = new CopyOnWriteArrayList<>();
-    private ExecutorService executorService = Executors.newFixedThreadPool(2);
     private final String targetUrl;
     private Runnable eventEmitter;
 
-    public SseTestClient2(String targetUrl) {
+    public SseTestClient(String targetUrl) {
         this.targetUrl = targetUrl;
     }
 
-    public static SseTestClient2 fromUri(String uri, String... objects) {
+    public static SseTestClient fromUri(String uri, String... objects) {
         String finalUri = uri;
         for (String object : objects) {
             finalUri = uri.replaceFirst("\\{(.*?)}", object);
         }
-        return new SseTestClient2("http://localhost:" + RestAssured.port + finalUri);
+        return new SseTestClient("http://localhost:" + RestAssured.port + finalUri);
     }
 
-    public SseTestClient2 setEventEmitter(Runnable eventEmitter) {
+    public SseTestClient setEventEmitter(Runnable eventEmitter) {
         this.eventEmitter = eventEmitter;
         return this;
     }
 
-    public SseTestClient2 runFor(Duration duration) {
+    public SseTestClient runFor(Duration duration) {
         collectedEvents.clear();
         final Client client = ClientBuilder.newClient();
         final WebTarget target = client.target(targetUrl);
-
-        executorService.submit(() -> {
-            SseEventSource source = SseEventSource.target(target)
-                                                  .reconnectingEvery(60, TimeUnit.SECONDS)
-                                                  .build();
-            source.register(this::collectEvent, this::handleError);
-            source.open();
-            isEventSourceReady.set(true);
-            sleep(duration);
-            source.close();
-        });
-
-        Awaitility.await().untilTrue(isEventSourceReady);
-        executorService.submit(eventEmitter);
+        SseEventSource source = SseEventSource.target(target)
+                                              .reconnectingEvery(60, TimeUnit.SECONDS)
+                                              .build();
+        source.register(this::collectEvent, this::handleError);
+        source.open();
+        sleep(Duration.ofMillis(100));
+        eventEmitter.run();
         sleep(duration);
+        source.close();
         client.close();
         return this;
     }
@@ -71,7 +59,6 @@ public class SseTestClient2 {
     }
 
     private void collectEvent(InboundSseEvent inboundSseEvent) {
-        LOGGER.info("Event received...");
         final String rawEvent = inboundSseEvent.readData();
         collectedEvents.add(rawEvent);
         LOGGER.info("Collected event: {}", rawEvent);

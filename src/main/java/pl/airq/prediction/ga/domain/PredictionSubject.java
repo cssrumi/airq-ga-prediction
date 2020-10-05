@@ -1,9 +1,15 @@
 package pl.airq.prediction.ga.domain;
 
+import io.reactivex.Scheduler;
+import io.reactivex.internal.schedulers.SingleScheduler;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subjects.ReplaySubject;
 import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.converters.multi.MultiRxConverters;
 import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
-import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
 import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.enterprise.context.ApplicationScoped;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,16 +20,15 @@ import pl.airq.common.vo.StationId;
 class PredictionSubject {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PredictionSubject.class);
-//    private final UnicastProcessor<Prediction> subject = UnicastProcessor.create();
-    private final BroadcastProcessor<Prediction> subject = BroadcastProcessor.create();
+    private final ReplaySubject<Prediction> rxSubject = ReplaySubject.createWithSize(1);
 
     void emit(Prediction prediction) {
-        subject.onNext(prediction);
+        rxSubject.onNext(prediction);
         LOGGER.info("New prediction has been emitted");
     }
 
     Multi<Prediction> stream() {
-        return subject;
+        return Multi.createFrom().converter(MultiRxConverters.fromObservable(), rxSubject);
     }
 
     Multi<Prediction> stream(StationId stationId) {
