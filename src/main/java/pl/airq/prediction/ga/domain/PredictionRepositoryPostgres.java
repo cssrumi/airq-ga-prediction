@@ -50,7 +50,7 @@ public class PredictionRepositoryPostgres extends PersistentRepositoryPostgres<P
         return Tuple.of(prediction.timestamp)
                     .addDouble(prediction.value)
                     .addString(config)
-                    .addString(prediction.stationId.getId());
+                    .addString(prediction.stationId.value());
     }
 
     @Override

@@ -19,7 +19,7 @@ public class EnrichedDataCache extends CacheWithFallback<StationId, EnrichedData
 
     @Override
     Uni<EnrichedData> findLatest(StationId key) {
-        return query.findLatestByStation(key.getId());
+        return query.findLatestByStation(key.value());
     }
 
     @Override

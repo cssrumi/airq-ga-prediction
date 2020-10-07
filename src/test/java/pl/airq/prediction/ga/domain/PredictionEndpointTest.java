@@ -52,7 +52,7 @@ public class PredictionEndpointTest {
         Prediction prediction = prediction(stationId);
         when(facade.findPrediction(any())).thenReturn(Uni.createFrom().item(prediction));
 
-        final Prediction result = get(FIND_LATEST_URI, stationId.getId())
+        final Prediction result = get(FIND_LATEST_URI, stationId.value())
                 .then()
                 .statusCode(200)
                 .extract().as(Prediction.class);
@@ -64,7 +64,7 @@ public class PredictionEndpointTest {
     @Test
     void stream_with5EventsEmitted_expect5Events() {
         StationId stationId = StationId.from("station");
-        final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.getId())
+        final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.value())
                                                  .setEventEmitter(() -> {
                                                      emit(prediction(stationId), 0);
                                                      emit(prediction(stationId), 0);
@@ -82,7 +82,7 @@ public class PredictionEndpointTest {
     void stream_with1EmitBeforeAnd5InTheMiddleOfSubscription_expect5Events() {
         StationId stationId = StationId.from("station2");
         subject.emit(prediction(stationId));
-        final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.getId())
+        final List<String> events = SseTestClient.fromUri(STREAM_URI, stationId.value())
                                                  .setEventEmitter(() -> {
                                                      emit(prediction(stationId), 0);
                                                      emit(prediction(stationId), 0);

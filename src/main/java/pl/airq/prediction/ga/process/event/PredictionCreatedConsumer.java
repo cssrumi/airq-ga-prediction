@@ -21,6 +21,6 @@ public class PredictionCreatedConsumer implements Consumer<PredictionCreated> {
 
     @Override
     public Uni<Void> consume(PredictionCreated event) {
-        return MutinyUtils.uniFromRunnable(() -> LOGGER.debug("New prediction for {} created.", event.payload.prediction.stationId.getId()));
+        return MutinyUtils.uniFromRunnable(() -> LOGGER.debug("New prediction for {} created.", event.payload.prediction.stationId.value()));
     }
 }
