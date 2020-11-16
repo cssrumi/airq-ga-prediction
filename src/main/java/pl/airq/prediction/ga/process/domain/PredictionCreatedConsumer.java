@@ -1,4 +1,4 @@
-package pl.airq.prediction.ga.process.event;
+package pl.airq.prediction.ga.process.domain;
 
 import io.quarkus.vertx.ConsumeEvent;
 import io.smallrye.mutiny.Uni;
@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import pl.airq.common.process.MutinyUtils;
 import pl.airq.common.process.event.Consumer;
 import pl.airq.prediction.ga.process.TopicConstant;
+import pl.airq.prediction.ga.domain.event.PredictionCreated;
 
 @ApplicationScoped
 public class PredictionCreatedConsumer implements Consumer<PredictionCreated> {
@@ -21,6 +22,6 @@ public class PredictionCreatedConsumer implements Consumer<PredictionCreated> {
 
     @Override
     public Uni<Void> consume(PredictionCreated event) {
-        return MutinyUtils.uniFromRunnable(() -> LOGGER.debug("New prediction for {} created.", event.payload.prediction.stationId.value()));
+        return MutinyUtils.fromRunnable(() -> LOGGER.debug("New prediction for {} created.", event.payload.prediction.stationId.value()));
     }
 }

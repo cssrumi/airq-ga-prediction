@@ -1,4 +1,4 @@
-package pl.airq.prediction.ga.process.event;
+package pl.airq.prediction.ga.domain.event;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import pl.airq.common.domain.prediction.Prediction;

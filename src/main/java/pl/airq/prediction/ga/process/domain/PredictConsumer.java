@@ -1,4 +1,4 @@
-package pl.airq.prediction.ga.process.command;
+package pl.airq.prediction.ga.process.domain;
 
 import io.quarkus.vertx.ConsumeEvent;
 import io.smallrye.mutiny.Uni;
@@ -10,6 +10,7 @@ import pl.airq.common.process.event.Consumer;
 import pl.airq.common.process.failure.Failure;
 import pl.airq.prediction.ga.domain.PredictionFacade;
 import pl.airq.prediction.ga.process.TopicConstant;
+import pl.airq.prediction.ga.domain.command.Predict;
 
 @ApplicationScoped
 public class PredictConsumer implements Consumer<Predict> {

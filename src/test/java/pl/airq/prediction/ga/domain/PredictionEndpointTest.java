@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
 import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.domain.prediction.PredictionConfig;
 import pl.airq.common.vo.StationId;
-import pl.airq.prediction.ga.process.external.AirqDataEnrichedEventConsumer;
-import pl.airq.prediction.ga.process.external.AirqPhenotypeCreatedEventConsumer;
+import pl.airq.prediction.ga.process.enriched.EnrichedDataConsumer;
+import pl.airq.prediction.ga.process.phenotype.AirqPhenotypeCreatedConsumer;
 import pl.airq.prediction.ga.utils.SseTestClient;
 
 import static io.restassured.RestAssured.get;
@@ -35,9 +35,9 @@ public class PredictionEndpointTest {
     private static final String STREAM_URI = "/api/prediction/{stationId}/stream";
 
     @InjectMock
-    AirqDataEnrichedEventConsumer dataEnrichedEventConsumer;
+    EnrichedDataConsumer dataEnrichedEventConsumer;
     @InjectMock
-    AirqPhenotypeCreatedEventConsumer phenotypeCreatedEventConsumer;
+    AirqPhenotypeCreatedConsumer phenotypeCreatedEventConsumer;
     @InjectMock
     PredictionFacade facade;
 

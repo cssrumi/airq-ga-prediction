@@ -2,10 +2,10 @@ package pl.airq.prediction.ga.process;
 
 import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.vo.StationId;
-import pl.airq.prediction.ga.process.command.Predict;
-import pl.airq.prediction.ga.process.command.PredictPayload;
-import pl.airq.prediction.ga.process.event.PredictionCreated;
-import pl.airq.prediction.ga.process.event.PredictionCreatedPayload;
+import pl.airq.prediction.ga.domain.command.Predict;
+import pl.airq.prediction.ga.domain.command.PredictPayload;
+import pl.airq.prediction.ga.domain.event.PredictionCreated;
+import pl.airq.prediction.ga.domain.event.PredictionCreatedPayload;
 
 public class EventFactory {
 

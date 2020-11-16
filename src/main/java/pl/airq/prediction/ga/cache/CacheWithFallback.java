@@ -17,7 +17,7 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
 
     @Override
     public Uni<V> get(K key) {
-        return Uni.createFrom().item(cache.getOrDefault(key, null))
+        return Uni.createFrom().item(cache.get(key))
                   .onItem().ifNull().switchTo(findLatestAndSave(key));
     }
 
@@ -50,7 +50,7 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
 
     @Override
     public Uni<Void> clear() {
-        return MutinyUtils.uniFromRunnable(cache::clear)
+        return MutinyUtils.fromRunnable(cache::clear)
                           .invoke(ignore -> LOGGER.info("{} cleared.", cacheName()));
     }
 

@@ -1,7 +1,7 @@
 package pl.airq.prediction.ga.domain;
 
-import pl.airq.common.domain.exception.ProcessingException;
-import pl.airq.common.domain.exception.ResourceNotFoundException;
+import pl.airq.common.exception.ProcessingException;
+import pl.airq.common.exception.ResourceNotFoundException;
 
 public class PredictionProcessingException extends ProcessingException {
 
