@@ -39,8 +39,8 @@ public class PredictionFacade {
     public Uni<Prediction> predict(StationId stationId) {
         return predictionService.predict(stationId)
                                 .onItem().ifNull().failWith(PredictionProcessingException::new)
-                                .invokeUni(repository::save)
-                                .invokeUni(prediction -> cache.upsert(stationId, prediction))
+                                .call(repository::save)
+                                .call(prediction -> cache.upsert(stationId, prediction))
                                 .invoke(prediction -> eventBus.publish(EventFactory.predictionCreated(prediction)))
                                 .invoke(publisher::emit);
     }
