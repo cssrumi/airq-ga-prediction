@@ -60,9 +60,10 @@ import pl.airq.prediction.ga.domain.PredictionSubjectPublicAdapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static pl.airq.prediction.ga.integration.DBConstant.CREATE_PREDICTION_TABLE;
 import static pl.airq.prediction.ga.integration.DBConstant.DROP_PREDICTION_TABLE;
 
@@ -79,6 +80,7 @@ public class IntegrationTest {
     private static final Float PHENOTYPE_WIND = 2f;
 
     private final List<Prediction> predictionList = new CopyOnWriteArrayList<>();
+    private Cancellable subscription;
 
     @InjectMock
     AirqPhenotypeQueryPostgres phenotypeQuery;
@@ -120,12 +122,14 @@ public class IntegrationTest {
 
         when(phenotypeQuery.findLatestByStationId(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
         when(enrichedDataQuery.findLatestByStation(any(String.class))).thenReturn(Uni.createFrom().nullItem());
+        unsubscribe();
     }
 
     @AfterAll
     void clear() {
         enrichedDataProducer.close();
         airqPhenotypeProducer.close();
+        unsubscribe();
     }
 
     @Test
@@ -136,7 +140,7 @@ public class IntegrationTest {
         final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
         Double expectedPredictionValue = (double) (DATA_TEMP * PHENOTYPE_TEMP + DATA_WIND * PHENOTYPE_WIND);
 
-        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+        subscribeToPredictionTopic(stationId);
         sendEvent(airqPhenotypeCreatedEvent);
         sleep(Duration.ofSeconds(1));
         sendEvent(enrichedDataCreatedEvent);
@@ -151,7 +155,6 @@ public class IntegrationTest {
         assertThat(result.stationId).isEqualTo(stationId);
         assertThat(predictionList).containsOnly(result);
         verifyPredictionCount(1, stationId);
-        subscription.cancel();
     }
 
     @Test
@@ -162,7 +165,7 @@ public class IntegrationTest {
         // additional call to phenotypeQuery
         assertThat(airqPhenotypeCache.getBlocking(stationId)).isNull();
 
-        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+        subscribeToPredictionTopic(stationId);
         sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
@@ -170,7 +173,6 @@ public class IntegrationTest {
         verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
         assertThat(predictionList).isEmpty();
         verifyPredictionCount(0, stationId);
-        subscription.cancel();
     }
 
     @Test
@@ -180,12 +182,12 @@ public class IntegrationTest {
         final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
         final AirqPhenotype phenotype = airqPhenotypeCreated(stationId).payload.airqPhenotype;
         // every check increase query invocation
-        assertNull(airqPhenotypeCache.getBlocking(stationId));
-        assertNull(enrichedDataCache.getBlocking(stationId));
-        assertNull(predictionCache.getBlocking(stationId));
+        assertThat(airqPhenotypeCache.getBlocking(stationId)).isNull();
+        assertThat(enrichedDataCache.getBlocking(stationId)).isNull();
+        assertThat(predictionCache.getBlocking(stationId)).isNull();
         when(phenotypeQuery.findLatestByStationId(stationId)).thenReturn(Uni.createFrom().item(phenotype));
 
-        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+        subscribeToPredictionTopic(stationId);
         sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
@@ -196,7 +198,16 @@ public class IntegrationTest {
 
         assertThat(predictionList).containsOnly(result);
         verifyPredictionCount(1, stationId);
-        subscription.cancel();
+    }
+
+    private void subscribeToPredictionTopic(StationId stationId) {
+        subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+    }
+
+    private void unsubscribe() {
+        if (subscription != null) {
+            subscription.cancel();
+        }
     }
 
     private void verifyPredictionCount(int value, StationId stationId) {
