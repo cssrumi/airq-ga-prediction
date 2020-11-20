@@ -65,8 +65,7 @@ abstract class CacheWithFallback<K, V> implements Cache<K, V> {
     }
 
     protected Uni<V> findLatestAndSave(K key) {
-        return findLatest(key)
-                .onItem().ifNotNull().invoke(value -> cache.put(key, value));
+        return findLatest(key).onItem().ifNotNull().invoke(value -> cache.put(key, value));
     }
 
     abstract Uni<V> findLatest(K key);

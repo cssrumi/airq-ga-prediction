@@ -5,14 +5,21 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.quarkus.test.junit.mockito.InjectSpy;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.subscription.Cancellable;
+import io.vertx.mutiny.pgclient.PgPool;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
@@ -25,90 +32,114 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.mockito.verification.Timeout;
-import org.testcontainers.shaded.org.apache.commons.lang.RandomStringUtils;
 import pl.airq.common.domain.DataProvider;
-import pl.airq.common.domain.enriched.AirqDataEnrichedEvent;
-import pl.airq.common.domain.enriched.AirqDataEnrichedPayload;
 import pl.airq.common.domain.enriched.EnrichedData;
 import pl.airq.common.domain.phenotype.AirqPhenotype;
-import pl.airq.common.domain.phenotype.AirqPhenotypeCreatedEvent;
-import pl.airq.common.domain.phenotype.AirqPhenotypeCreatedPayload;
 import pl.airq.common.domain.prediction.Prediction;
 import pl.airq.common.domain.prediction.PredictionConfig;
-import pl.airq.common.infrastructure.persistance.AirqPhenotypeQueryPostgres;
-import pl.airq.common.infrastructure.persistance.EnrichedDataQueryPostgres;
-import pl.airq.common.infrastructure.persistance.PredictionQueryPostgres;
+import pl.airq.common.infrastructure.query.AirqPhenotypeQueryPostgres;
+import pl.airq.common.infrastructure.query.EnrichedDataQueryPostgres;
+import pl.airq.common.infrastructure.query.PredictionQueryPostgres;
+import pl.airq.common.kafka.AirqEventSerializer;
+import pl.airq.common.kafka.SKeySerializer;
+import pl.airq.common.kafka.TSKeySerializer;
 import pl.airq.common.process.EventParser;
+import pl.airq.common.process.ctx.enriched.EnrichedDataCreatedEvent;
+import pl.airq.common.process.ctx.enriched.EnrichedDataDeletedEvent;
+import pl.airq.common.process.ctx.enriched.EnrichedDataEventPayload;
+import pl.airq.common.process.ctx.enriched.EnrichedDataUpdatedEvent;
+import pl.airq.common.process.ctx.phenotype.AirqPhenotypeCreatedEvent;
+import pl.airq.common.process.ctx.phenotype.AirqPhenotypeCreatedPayload;
 import pl.airq.common.process.event.AirqEvent;
+import pl.airq.common.store.key.Key;
+import pl.airq.common.store.key.SKey;
+import pl.airq.common.store.key.TSKey;
 import pl.airq.common.vo.StationId;
 import pl.airq.prediction.ga.cache.Cache;
-import pl.airq.prediction.ga.domain.MockPredictionRepositoryPostgres;
+import pl.airq.prediction.ga.domain.PredictionSubjectPublicAdapter;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static pl.airq.prediction.ga.integration.DBConstant.CREATE_PREDICTION_TABLE;
+import static pl.airq.prediction.ga.integration.DBConstant.DROP_PREDICTION_TABLE;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @QuarkusTestResource(KafkaResource.class)
+@QuarkusTestResource(PostgresResource.class)
 @QuarkusTest
 public class IntegrationTest {
 
+    private static final AtomicInteger STATION_NUMBER = new AtomicInteger(0);
     private static final Float DATA_TEMP = 3f;
     private static final Float DATA_WIND = 4f;
     private static final Float PHENOTYPE_TEMP = 2f;
     private static final Float PHENOTYPE_WIND = 2f;
 
-    @ConfigProperty(name = "mp.messaging.incoming.data-enriched.topic")
-    String dataEnrichedTopic;
-    @ConfigProperty(name = "mp.messaging.incoming.airq-phenotype-created.topic")
-    String airqPhenotypeCreatedTopic;
+    private final List<Prediction> predictionList = new CopyOnWriteArrayList<>();
+
     @InjectMock
     AirqPhenotypeQueryPostgres phenotypeQuery;
     @InjectMock
     EnrichedDataQueryPostgres enrichedDataQuery;
-    @InjectMock
-    PredictionQueryPostgres predictionQuery;
+
     @InjectSpy
-    MockPredictionRepositoryPostgres repository;
+    PredictionQueryPostgres predictionQuery;
+
     @Inject
-    KafkaProducer<Void, String> client;
+    PgPool client;
+    @Inject
+    KafkaProducer<TSKey, AirqEvent<EnrichedDataEventPayload>> enrichedDataProducer;
+    @Inject
+    KafkaProducer<SKey, AirqEvent<AirqPhenotypeCreatedPayload>> airqPhenotypeProducer;
+
+    @Inject
+    PredictionSubjectPublicAdapter predictionSubject;
     @Inject
     Cache<StationId, Prediction> predictionCache;
     @Inject
     Cache<StationId, EnrichedData> enrichedDataCache;
     @Inject
     Cache<StationId, AirqPhenotype> airqPhenotypeCache;
-    @Inject
-    EventParser parser;
+
+    @ConfigProperty(name = "mp.messaging.incoming.data-enriched.topic")
+    String enrichedDataTopic;
+    @ConfigProperty(name = "mp.messaging.incoming.airq-phenotype-created.topic")
+    String airqPhenotypeTopic;
 
     @BeforeEach
     void beforeEach() {
+        recreatePredictionTable();
+
         predictionCache.clearBlocking();
         enrichedDataCache.clearBlocking();
         airqPhenotypeCache.clearBlocking();
-        reset(repository, phenotypeQuery, enrichedDataQuery, predictionQuery);
-        repository.setSaveAndUpsertResult(Boolean.TRUE);
+        predictionList.clear();
+
         when(phenotypeQuery.findLatestByStationId(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
         when(enrichedDataQuery.findLatestByStation(any(String.class))).thenReturn(Uni.createFrom().nullItem());
-        when(predictionQuery.findLatest(any(StationId.class))).thenReturn(Uni.createFrom().nullItem());
     }
 
     @AfterAll
     void clear() {
-        client.close();
+        enrichedDataProducer.close();
+        airqPhenotypeProducer.close();
     }
 
     @Test
-    void validate_whenEnrichedDataAndAirqPhenotypeSend_expectPredictionInCache() {
+    void EnrichedDataCreatedAndAirqPhenotypeArrived_withNoEnrichedDataAndPhenotypeInCache_expectPrediction() {
         final StationId stationId = stationId();
-        final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreatedEvent(stationId);
-        final AirqDataEnrichedEvent airqDataEnrichedEvent = airqDataEnrichedEvent(stationId);
+        final OffsetDateTime timestamp = OffsetDateTime.now();
+        final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreated(stationId);
+        final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
         Double expectedPredictionValue = (double) (DATA_TEMP * PHENOTYPE_TEMP + DATA_WIND * PHENOTYPE_WIND);
 
+        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
         sendEvent(airqPhenotypeCreatedEvent);
-        sendEvent(airqDataEnrichedEvent);
+        sleep(Duration.ofSeconds(1));
+        sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(20)).until(() -> Objects.nonNull(airqPhenotypeCache.getBlocking(stationId)));
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
@@ -116,50 +147,74 @@ public class IntegrationTest {
 
         final Prediction result = predictionCache.getBlocking(stationId);
 
-        assertEquals(expectedPredictionValue, result.value);
-        assertEquals(stationId, result.stationId);
-        verify(repository, atLeastOnce()).save(any(Prediction.class));
+        assertThat(result.value).isEqualTo(expectedPredictionValue);
+        assertThat(result.stationId).isEqualTo(stationId);
+        assertThat(predictionList).containsOnly(result);
+        verifyPredictionCount(1, stationId);
+        subscription.cancel();
     }
 
     @Test
-    void validate_whenEnrichedDataSend_expectNoPrediction() {
+    void EnrichedDataCreatedArrived_withNoAirqPhenotypeInCache_expectNoPrediction() {
         final StationId stationId = stationId();
-        final AirqDataEnrichedEvent event = airqDataEnrichedEvent(stationId);
+        final OffsetDateTime timestamp = OffsetDateTime.now();
+        final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
         // additional call to phenotypeQuery
-        assertNull(airqPhenotypeCache.getBlocking(stationId));
+        assertThat(airqPhenotypeCache.getBlocking(stationId)).isNull();
 
-        sendEvent(event);
+        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+        sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
+
         verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
-        verify(repository, new Timeout(Duration.ofSeconds(2).toMillis(), times(0))).save(any(Prediction.class));
+        assertThat(predictionList).isEmpty();
+        verifyPredictionCount(0, stationId);
+        subscription.cancel();
     }
 
     @Test
-    void validate_whenEnrichedDataSend_expectPredictionInCache() {
+    void EnrichedDataSend_withAirqPhenotypeInCache_expectPrediction() {
         final StationId stationId = stationId();
-        final AirqDataEnrichedEvent event = airqDataEnrichedEvent(stationId);
-        final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreatedEvent(stationId);
-        final AirqPhenotype phenotype = airqPhenotypeCreatedEvent.payload.airqPhenotype;
+        final OffsetDateTime timestamp = OffsetDateTime.now();
+        final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
+        final AirqPhenotype phenotype = airqPhenotypeCreated(stationId).payload.airqPhenotype;
         // every check increase query invocation
         assertNull(airqPhenotypeCache.getBlocking(stationId));
         assertNull(enrichedDataCache.getBlocking(stationId));
         assertNull(predictionCache.getBlocking(stationId));
         when(phenotypeQuery.findLatestByStationId(stationId)).thenReturn(Uni.createFrom().item(phenotype));
 
-        sendEvent(event);
+        Cancellable subscription = predictionSubject.stream(stationId).subscribe().with(predictionList::add);
+        sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
         verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
-        verify(repository, timeout(Duration.ofSeconds(2).toMillis())).save(any(Prediction.class));
+
+        final Prediction result = predictionCache.getBlocking(stationId);
+
+        assertThat(predictionList).containsOnly(result);
+        verifyPredictionCount(1, stationId);
+        subscription.cancel();
+    }
+
+    private void verifyPredictionCount(int value, StationId stationId) {
+        Set<Prediction> data = predictionQuery.findAll(stationId).await().atMost(Duration.ofSeconds(2));
+        assertThat(data).hasSize(value);
+    }
+
+    private void recreatePredictionTable() {
+        client.query(DROP_PREDICTION_TABLE).execute()
+              .flatMap(r -> client.query(CREATE_PREDICTION_TABLE).execute())
+              .await().atMost(Duration.ofSeconds(5));
     }
 
     private StationId stationId() {
-        return StationId.from(RandomStringUtils.randomAlphabetic(5));
+        return StationId.from("Station" + STATION_NUMBER.incrementAndGet());
     }
 
-    private AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent(StationId stationId) {
+    private AirqPhenotypeCreatedEvent airqPhenotypeCreated(StationId stationId) {
         AirqPhenotype phenotype = new AirqPhenotype(
                 OffsetDateTime.now(),
                 stationId,
@@ -172,9 +227,21 @@ public class IntegrationTest {
         return new AirqPhenotypeCreatedEvent(OffsetDateTime.now(), payload);
     }
 
-    private AirqDataEnrichedEvent airqDataEnrichedEvent(StationId stationId) {
-        EnrichedData data = new EnrichedData(
-                OffsetDateTime.now(),
+    private EnrichedDataCreatedEvent enrichedDataCreated(StationId stationId, OffsetDateTime timestamp) {
+        return new EnrichedDataCreatedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp)));
+    }
+
+    private EnrichedDataUpdatedEvent enrichedDataUpdated(StationId stationId, OffsetDateTime timestamp) {
+        return new EnrichedDataUpdatedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp)));
+    }
+
+    private EnrichedDataDeletedEvent enrichedDataDeleted(StationId stationId, OffsetDateTime timestamp) {
+        return new EnrichedDataDeletedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp)));
+    }
+
+    private EnrichedData enrichedData(StationId stationId, OffsetDateTime timestamp) {
+        return new EnrichedData(
+                timestamp,
                 null,
                 null,
                 DATA_TEMP,
@@ -185,45 +252,76 @@ public class IntegrationTest {
                 null,
                 null,
                 DataProvider.AIRQ,
-                stationId);
-        AirqDataEnrichedPayload payload = new AirqDataEnrichedPayload(data);
-
-        return new AirqDataEnrichedEvent(OffsetDateTime.now(), payload);
+                stationId
+        );
     }
 
-    private void sendEvent(AirqEvent<?> airqEvent) {
-        final String rawEvent = parser.parse(airqEvent);
-        String topic = getTopic(airqEvent);
-        final Future<RecordMetadata> future = client.send(new ProducerRecord<>(topic, rawEvent));
+    @SuppressWarnings("unchecked")
+    private Key sendEvent(AirqEvent<?> event) {
+        if (event.payload instanceof EnrichedDataEventPayload) {
+            return sendEnrichedDataEvent((AirqEvent<EnrichedDataEventPayload>) event);
+        }
+        if (event.payload instanceof AirqPhenotypeCreatedPayload) {
+            return sendAirqPhenotypeEvent((AirqEvent<AirqPhenotypeCreatedPayload>) event);
+        }
+
+        throw new RuntimeException("Invalid event payload type: " + event.eventType());
+    }
+
+    private TSKey sendEnrichedDataEvent(AirqEvent<EnrichedDataEventPayload> event) {
+        EnrichedData enrichedData = event.payload.enrichedData;
+        TSKey key = TSKey.from(enrichedData.timestamp, enrichedData.station.value());
+        final Future<RecordMetadata> future = enrichedDataProducer.send(new ProducerRecord<>(enrichedDataTopic, key, event));
         try {
-            future.get();
-        } catch (InterruptedException | ExecutionException e) {
+            future.get(5, TimeUnit.SECONDS);
+            return key;
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private String getTopic(AirqEvent<?> airqEvent) {
-        if (airqEvent.eventType().equals(AirqDataEnrichedEvent.class.getSimpleName())) {
-            return dataEnrichedTopic;
+    private SKey sendAirqPhenotypeEvent(AirqEvent<AirqPhenotypeCreatedPayload> event) {
+        AirqPhenotype airqPhenotype = event.payload.airqPhenotype;
+        SKey key = new SKey(airqPhenotype.stationId);
+        final Future<RecordMetadata> future = airqPhenotypeProducer.send(new ProducerRecord<>(airqPhenotypeTopic, key, event));
+        try {
+            future.get(5, TimeUnit.SECONDS);
+            return key;
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new RuntimeException(e);
         }
-        if (airqEvent.eventType().equals(AirqPhenotypeCreatedEvent.class.getSimpleName())) {
-            return airqPhenotypeCreatedTopic;
-        }
+    }
 
-        throw new RuntimeException("Invalid event: " + airqEvent.eventType());
+    private void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException ignore) {
+        }
     }
 
     @Dependent
     static class KafkaClientConfiguration {
 
+        @ConfigProperty(name = "kafka.bootstrap.servers")
+        String bootstrapServers;
+
+        @Inject
+        EventParser parser;
+
         @Produces
-        KafkaProducer<Void, String> stringKafkaProducer(@ConfigProperty(name = "kafka.bootstrap.servers") String bootstrapServers) {
+        KafkaProducer<TSKey, AirqEvent<EnrichedDataEventPayload>> enrichedDataProducer() {
             Properties properties = new Properties();
             properties.put("bootstrap.servers", bootstrapServers);
-            properties.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-            properties.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
-            return new KafkaProducer<>(properties);
+            return new KafkaProducer<>(properties, new TSKeySerializer(), new AirqEventSerializer<>(parser));
+        }
+
+        @Produces
+        KafkaProducer<SKey, AirqEvent<AirqPhenotypeCreatedPayload>> airqPhenotypeProducer() {
+            Properties properties = new Properties();
+            properties.put("bootstrap.servers", bootstrapServers);
+
+            return new KafkaProducer<>(properties, new SKeySerializer(), new AirqEventSerializer<>(parser));
         }
 
     }

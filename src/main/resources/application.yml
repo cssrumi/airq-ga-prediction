@@ -19,11 +19,15 @@ mp:
       data-enriched:
         connector: smallrye-kafka
         topic: data.enriched
+        key:
+          deserializer: pl.airq.common.kafka.TSKeyDeserializer
         value:
           deserializer: org.apache.kafka.common.serialization.StringDeserializer
       airq-phenotype-created:
         connector: smallrye-kafka
-        topic: airq.phenotype.created
+        topic: phenotype.created
+        key:
+          deserializer: pl.airq.common.kafka.SKeyDeserializer
         value:
           deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
