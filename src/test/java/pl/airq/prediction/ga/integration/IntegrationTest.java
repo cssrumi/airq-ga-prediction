@@ -158,46 +158,109 @@ public class IntegrationTest {
     }
 
     @Test
+    void EnrichedDataUpdatedAndAirqPhenotypeArrived_withNoEnrichedDataAndPhenotypeInCache_expectPrediction() {
+        final StationId stationId = stationId();
+        final OffsetDateTime timestamp = OffsetDateTime.now();
+        final AirqPhenotypeCreatedEvent airqPhenotypeCreatedEvent = airqPhenotypeCreated(stationId);
+        final EnrichedDataUpdatedEvent enrichedDataUpdatedEvent = enrichedDataUpdated(stationId, timestamp);
+        Double expectedPredictionValue = (double) (DATA_TEMP * PHENOTYPE_TEMP + DATA_WIND * PHENOTYPE_WIND);
+
+        subscribeToPredictionTopic(stationId);
+        sendEvent(airqPhenotypeCreatedEvent);
+        sleep(Duration.ofSeconds(1));
+        sendEvent(enrichedDataUpdatedEvent);
+
+        await().atMost(Duration.ofSeconds(20)).until(() -> Objects.nonNull(airqPhenotypeCache.getBlocking(stationId)));
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
+
+        final Prediction result = predictionCache.getBlocking(stationId);
+
+        assertThat(result.value).isEqualTo(expectedPredictionValue);
+        assertThat(result.stationId).isEqualTo(stationId);
+        assertThat(predictionList).containsOnly(result);
+        verifyPredictionCount(1, stationId);
+    }
+
+    @Test
+    void EnrichedDataCreatedAndEnrichedDataUpdatedArrived_withNoEnrichedDataAndPhenotypeInCache_expectNoPrediction() {
+        final StationId stationId = stationId();
+        final OffsetDateTime timestamp = OffsetDateTime.now();
+        final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
+        EnrichedData enrichedData = enrichedDataCreatedEvent.payload.enrichedData;
+        final EnrichedDataUpdatedEvent enrichedDataUpdatedEvent = enrichedDataUpdated(
+                stationId, timestamp, enrichedData.temp + 1, enrichedData.wind + 2);
+
+        subscribeToPredictionTopic(stationId);
+        sendEvent(enrichedDataCreatedEvent);
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
+        EnrichedData created = enrichedDataCache.getBlocking(stationId);
+
+        sendEvent(enrichedDataUpdatedEvent);
+        await().atMost(Duration.ofSeconds(10)).until(() -> !Objects.equals(created, enrichedDataCache.getBlocking(stationId)));
+        EnrichedData updated = enrichedDataCache.getBlocking(stationId);
+
+        assertThat(created.timestamp).isEqualTo(updated.timestamp);
+        assertThat(created).isEqualTo(enrichedDataCreatedEvent.payload.enrichedData);
+        assertThat(updated).isEqualTo(enrichedDataUpdatedEvent.payload.enrichedData);
+
+        assertThat(predictionList).isEmpty();
+        verifyPredictionCount(0, stationId);
+    }
+
+    @Test
     void EnrichedDataCreatedArrived_withNoAirqPhenotypeInCache_expectNoPrediction() {
         final StationId stationId = stationId();
         final OffsetDateTime timestamp = OffsetDateTime.now();
         final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
-        // additional call to phenotypeQuery
-        assertThat(airqPhenotypeCache.getBlocking(stationId)).isNull();
 
         subscribeToPredictionTopic(stationId);
         sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
 
-        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
+        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(1))).findLatestByStationId(stationId);
         assertThat(predictionList).isEmpty();
         verifyPredictionCount(0, stationId);
     }
 
     @Test
-    void EnrichedDataSend_withAirqPhenotypeInCache_expectPrediction() {
+    void EnrichedDataCreatedArrived_withAirqPhenotypeInCache_expectPrediction() {
         final StationId stationId = stationId();
         final OffsetDateTime timestamp = OffsetDateTime.now();
         final EnrichedDataCreatedEvent enrichedDataCreatedEvent = enrichedDataCreated(stationId, timestamp);
         final AirqPhenotype phenotype = airqPhenotypeCreated(stationId).payload.airqPhenotype;
-        // every check increase query invocation
-        assertThat(airqPhenotypeCache.getBlocking(stationId)).isNull();
-        assertThat(enrichedDataCache.getBlocking(stationId)).isNull();
-        assertThat(predictionCache.getBlocking(stationId)).isNull();
+
         when(phenotypeQuery.findLatestByStationId(stationId)).thenReturn(Uni.createFrom().item(phenotype));
 
         subscribeToPredictionTopic(stationId);
         sendEvent(enrichedDataCreatedEvent);
 
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(enrichedDataCache.getBlocking(stationId)));
-        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(2))).findLatestByStationId(stationId);
+        verify(phenotypeQuery, new Timeout(Duration.ofSeconds(2).toMillis(), times(1))).findLatestByStationId(stationId);
         await().atMost(Duration.ofSeconds(10)).until(() -> Objects.nonNull(predictionCache.getBlocking(stationId)));
 
         final Prediction result = predictionCache.getBlocking(stationId);
+        final Prediction resultFromDb = predictionQuery.findLatest(stationId).await().atMost(Duration.ofSeconds(5));
 
+        assertThat(result).isEqualTo(resultFromDb);
         assertThat(predictionList).containsOnly(result);
         verifyPredictionCount(1, stationId);
+    }
+
+    @Test
+    void EnrichedDataDeletedArrived_withEnrichedDataForSameTimestampInCache_expectEnrichedDataRemovedFromCache() {
+        StationId stationId = stationId();
+        OffsetDateTime timestamp = OffsetDateTime.now();
+        EnrichedDataDeletedEvent enrichedDataDeletedEvent = enrichedDataDeleted(stationId, timestamp);
+        EnrichedData enrichedData = enrichedData(stationId, timestamp);
+
+        enrichedDataCache.upsertBlocking(stationId, enrichedData);
+        subscribeToPredictionTopic(stationId);
+        sendEvent(enrichedDataDeletedEvent);
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> Objects.isNull(enrichedDataCache.getBlocking(stationId)));
+        verifyPredictionCount(0, stationId);
     }
 
     private void subscribeToPredictionTopic(StationId stationId) {
@@ -246,17 +309,21 @@ public class IntegrationTest {
         return new EnrichedDataUpdatedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp)));
     }
 
+    private EnrichedDataUpdatedEvent enrichedDataUpdated(StationId stationId, OffsetDateTime timestamp, Float temp, Float wind) {
+        return new EnrichedDataUpdatedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp, temp, wind)));
+    }
+
     private EnrichedDataDeletedEvent enrichedDataDeleted(StationId stationId, OffsetDateTime timestamp) {
         return new EnrichedDataDeletedEvent(OffsetDateTime.now(), new EnrichedDataEventPayload(enrichedData(stationId, timestamp)));
     }
 
-    private EnrichedData enrichedData(StationId stationId, OffsetDateTime timestamp) {
+    private EnrichedData enrichedData(StationId stationId, OffsetDateTime timestamp, Float temp, Float wind) {
         return new EnrichedData(
                 timestamp,
                 null,
                 null,
-                DATA_TEMP,
-                DATA_WIND,
+                temp,
+                wind,
                 null,
                 null,
                 null,
@@ -265,6 +332,10 @@ public class IntegrationTest {
                 DataProvider.AIRQ,
                 stationId
         );
+    }
+
+    private EnrichedData enrichedData(StationId stationId, OffsetDateTime timestamp) {
+        return enrichedData(stationId, timestamp, DATA_TEMP, DATA_WIND);
     }
 
     @SuppressWarnings("unchecked")

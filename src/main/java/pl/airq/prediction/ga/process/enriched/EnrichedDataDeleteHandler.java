@@ -9,6 +9,7 @@ import pl.airq.common.domain.enriched.EnrichedData;
 import pl.airq.common.process.ctx.enriched.EnrichedDataEventPayload;
 import pl.airq.common.process.event.AirqEvent;
 import pl.airq.common.store.key.TSKey;
+import pl.airq.common.util.Timestamp;
 import pl.airq.common.vo.StationId;
 import pl.airq.prediction.ga.cache.Cache;
 
@@ -32,7 +33,7 @@ class EnrichedDataDeleteHandler implements EnrichedDataDispatcher.EnrichedDataHa
     private Uni<Void> processIfTimestampIsEq(TSKey key, Uni<Void> uni) {
         return cache.get(key.stationId())
                     .map(enrichedData -> enrichedData.timestamp)
-                    .map(timestamp -> timestamp.isEqual(key.timestamp()))
+                    .map(timestamp -> Timestamp.isEqual(timestamp, key.timestamp()))
                     .onItem().transformToUni(result -> result ? uni : Uni.createFrom().voidItem());
     }
 
